@@ -1,0 +1,14 @@
+set vlans vlan-id {{ vlan_id }} vlan-name "{{ vlan_name }}"
+set vlans vlan-id {{ vlan_id }} l3-interface "vlan{{ vlan_id }}"
+set vlan-interface interface vlan{{ vlan_id }} vif vlan{{ vlan_id }} address {{ip_mask.split('/')[0]}} prefix-length {{ip_mask.split('/')[1]}}
+
+set protocols spanning-tree pvst vlan {{ vlan_id }} enable true
+
+set interface aggregate-ethernet ae1 family ethernet-switching vlan members {{ vlan_id }}
+set interface aggregate-ethernet {{ port_mapping[model]['user_face_port'] }} family ethernet-switching vlan members {{ vlan_id }}
+
+set protocols vrrp interface vlan{{ vlan_id }} vif vlan{{ vlan_id }} vrid {{ vrrp_vrid }} ip {{ virtual_ip }}
+set protocols vrrp interface vlan{{ vlan_id }} vif vlan{{ vlan_id }} vrid {{ vrrp_vrid }} load-balance disable false
+
+set protocols dhcp relay interface vlan{{ vlan_id }} disable false
+set protocols dhcp relay interface vlan{{ vlan_id }} dhcp-server-address {{ dhcp_server_ip }}

@@ -1,0 +1,37 @@
+---
+- hosts: all
+  tasks:
+  - name: Get switch SN
+    shell: cat /sys/class/swmon/hwinfo/serial_number
+    register: sn
+  - set_fact: conf_file={{sn.stdout_lines[0]}}.conf
+
+  - name: Get switch current config
+    fetch:
+      src: /pica/config/pica.conf
+      dest: /home/automation/picos_config/{{ conf_file }}
+      flat: yes
+
+  #- name: push config in git
+  #  git_acp:
+  #    path: /home/pica8/picos_config
+  #    branch: master
+  #    comment: configuration
+  #    add: [ "{{ conf_file }}" ]
+  #    mode: ssh
+  #    #push_option: ci-skip=true
+  #    url: "git@localhost:/srv/picos_config.git"
+  #  delegate_to: localhost
+
+- hosts: localhost
+  tasks:
+  - name: git commit the config
+    shell: cd /home/automation/picos_config && git commit -am "commit new config"
+    ignore_errors: yes
+    register: commit_result
+  - debug: var=commit_result.stdout_lines
+
+  - name: git push the config
+    shell: cd /home/automation/picos_config && git push
+    register: push_result
+  - debug: var=push_result.stdout_lines

@@ -1,0 +1,46 @@
+---
+- name: Shows License info of all switches 
+  hosts: all 
+  tasks:  
+  - name: Shows license, Anisble Linux shell mode 
+    shell: /usr/sbin/license -s 
+    register: exec_result
+
+  - name: Show execution result
+    debug: var=exec_result.stdout_lines
+
+  - set_fact: 
+      hwid: "{{ exec_result.stdout_lines | join('') | regex_search('(([0-9A-Z]{4}-){3}[0-9A-Z]{4})') }}"
+  - debug: var=hwid
+
+  - name: Download the license
+    uri:
+      url: https://172.16.0.157/lifecycle/get_switch_license_by_hwid
+      validate_certs: false
+      method: POST
+      body_format: form-urlencoded
+      body:
+      - [ hwid, "{{ hwid }}" ]
+      status_code: 200
+    register: license_str
+
+  - name: Show license download result
+    debug: var=license_str.json.license
+
+  - name: Copy license to PICOS switch
+    copy: content="{{ license_str.json.license }}" dest=/home/automation/license.txt
+
+  - name: Install license to PICOS switch
+    shell: /usr/sbin/license -i /home/automation/license.txt
+    become: true
+
+  - name: Shows license agagin, Anisble Linux shell mode
+    shell: /usr/sbin/license -s
+    register: exec_result_new
+
+  - name: Show execution result
+    debug: var=exec_result_new.stdout_lines
+
+  - name: Restart PICOS
+    shell: service picos restart
+    become: true

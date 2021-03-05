@@ -1,0 +1,59 @@
+- name: Push daemon script before configure switch
+  copy: src="network_health_check.py" dest=/cftmp/ force=yes
+  become: True
+
+- name: Push check cconfig script before configure switch
+  copy: src="config_success_check.py" dest=/cftmp/ force=yes
+  become: True
+
+- name: Run health check script
+  shell: nohup python /cftmp/network_health_check.py 30 2 {{ ampcon_ip }}&
+  become: True
+
+- name: Get switch SN
+  shell: cat /sys/class/swmon/hwinfo/serial_number
+  register: sn_result
+#- debug: var=sn_result.stdout_lines[0]
+
+- name: Get switch hardware
+  shell: /usr/bin/version
+  register: version_info
+- set_fact:
+      model: "{{ version_info.stdout_lines[2] | regex_search('([0-9a-zA-Z]{4,}(_|-)[0-9a-zA-Z]{2,})') }}"
+#- debug: var=model
+
+- name: Get switch Hostname
+  command: hostname
+  register: hostname_result
+#- debug: var=hostname_result.stdout_lines[0]
+
+- name: Decide which role this switch is
+  set_fact:
+    sw_role: "{% if hostname_result.stdout_lines[0] | regex_search('ACC', ignorecase=True) %}access{% elif hostname_result.stdout_lines[0] | regex_search('VNE', ignorecase=True) %}vtep{% elif hostname_result.stdout_lines[0] | regex_search('OVERLAY', ignorecase=True) %}gateway{% else %}others{% endif %}"
+#- debug: var=sw_role
+
+- name: Generate configuration based on template and switch role
+  template: src={{ sw_role }}_vlan_template.j2 dest=/cftmp/{{ sn_result.stdout_lines[0] }}_vlan.conf
+  become: true
+  when: sw_role != "others"
+
+- name: apply the  config in switch
+  #picos_config: mode='cli_config' cmd='execute /cftmp/{{ sn_result.stdout_lines[0] }}_vlan.conf'
+  picos_config: mode='config_load' cmd='/cftmp/{{ sn_result.stdout_lines[0] }}_vlan.conf'
+  register: exec_result1
+  #run_once: true
+  #async: 20
+  #poll: 0
+  when: sw_role != "others"
+- debug:
+    msg: ":::::Hostname:  {{hostname_result.stdout_lines[0]}}  ::::::   Configuration is:  {{exec_result1.stdout_lines}}"
+  when: sw_role != "others"
+
+- name: check whether the config is push successful
+  shell: python /cftmp/config_success_check.py /cftmp/{{ sn_result.stdout_lines[0] }}_vlan.conf
+  register: exec_result
+  when: sw_role != "others"
+  ignore_errors: yes
+- debug:
+    msg: ":::::Hostname:  {{hostname_result.stdout_lines[0]}}  ::::::   Configuration is:  {{exec_result.stdout_lines}}"
+  when: sw_role != "others"

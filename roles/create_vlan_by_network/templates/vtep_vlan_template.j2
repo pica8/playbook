@@ -1,0 +1,6 @@
+set vlans vlan-id {{ vlan_id }} vlan-name "{{ vlan_name }}"
+set protocols spanning-tree pvst vlan {{ vlan_id }} enable true
+
+{% for port in port_mapping[model]['user_face_port'] %}
+set interface aggregate-ethernet {{ port }} family ethernet-switching vlan members {{ vlan_id }}
+{% endfor %}

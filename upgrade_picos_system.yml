@@ -1,0 +1,37 @@
+- name: Show system version and model
+  shell: /usr/bin/version
+  register: version_info
+
+- name: Show version
+  debug: var=version_info.stdout_lines
+
+- set_fact:
+    model: "{{ version_info.stdout_lines[2] | regex_search('([0-9a-zA-Z]{4,}(_|-)[0-9a-zA-Z]{2,})') | lower }}"
+- debug: var=model
+
+- name: get the path of image base on model
+  uri:
+    url: https://172.16.0.157/lifecycle/get_switch_image_path
+    validate_certs: false
+    method: POST
+    body_format: form-urlencoded
+    body:
+    - [ model, "{{ model }}" ]
+    status_code: 200
+  register: image_str
+
+- name: Show image path
+  debug: var=image_str.json.onie_image_path
+- name: Show image version
+  debug: var=image_str.json.version
+
+- name: Copy image to switch
+  copy: src="{{ image_str.json.tar_image_path}}" dest=/cftmp/ force=yes mode=0777
+  become: true
+
+- name: Sync the copyed file to disk
+  shell: sync
+  become: true
+
+- name: Upgrade system
+  picos_config: mode='shell' cmd='sudo /usr/sbin/upgrade2 /cftmp/{{image_str.json.tar_image_path.split("/")[7]}}'

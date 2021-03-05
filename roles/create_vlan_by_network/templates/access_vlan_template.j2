@@ -1,0 +1,13 @@
+set vlans vlan-id {{ vlan_id }} vlan-name "{{ vlan_name }}"
+set protocols spanning-tree pvst vlan {{ vlan_id }} enable true
+
+{# set interface aggregate-ethernet ae1 family ethernet-switching vlan members {{ vlan_id }}
+{% for i in range(access_port_start, access_port_end+1) %}
+set interface gigabit-ethernet {{ access_port_type }}e-1/1/{{ i }} family ethernet-switching vlan members {{ vlan_id }}
+{% endfor %}
+#}
+
+set interface aggregate-ethernet {{ port_mapping[model]['uplink_port'] }} family ethernet-switching vlan members {{ vlan_id }}
+{% for port in port_mapping[model]['user_face_port'] %}
+set interface gigabit-ethernet {{ port }} family ethernet-switching vlan members {{ vlan_id }}
+{% endfor %}

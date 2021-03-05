@@ -1,0 +1,33 @@
+- name: Push daemon script before configure switch
+  copy: src="collect_mlag.py" dest=/cftmp/ force=yes
+  become: True
+
+- name: Get switch SN
+  shell: cat /sys/class/swmon/hwinfo/serial_number
+  register: sn_result
+#- debug: var=sn_result.stdout_lines[0]
+
+- name: Get switch hardware
+  shell: /usr/bin/version
+  register: version_info
+- set_fact:
+      model: "{{ version_info.stdout_lines[2] | regex_search('([0-9a-zA-Z]{4,}(_|-)[0-9a-zA-Z]{2,})') }}"
+#- debug: var=model
+
+- name: Get switch Hostname
+  command: hostname
+  register: hostname_result
+#- debug: var=hostname_result.stdout_lines[0]
+
+- name: Decide which role this switch is
+  set_fact:
+    sw_role: "{% if hostname_result.stdout_lines[0] | regex_search('ACC', ignorecase=True) %}access{% elif hostname_result.stdout_lines[0] | regex_search('VNE', ignorecase=True) %}vtep{% elif hostname_result.stdout_lines[0] | regex_search('OVERLAY', ignorecase=True) %}gateway{% else %}others{% endif %}"
+#- debug: var=sw_role
+
+- name: Run mlag collect script
+  shell: python /cftmp/collect_mlag.py
+  register: exec_result
+  become: True
+
+- debug:
+    msg: ":::::Hostname:  {{hostname_result.stdout_lines[0]}}  ::::::   Result is:  {{exec_result.stdout}}"

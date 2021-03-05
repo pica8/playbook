@@ -1,0 +1,64 @@
+---
+- name: Monitor  the switch  config,  if changed, send an email to  admin
+  hosts: all
+  tasks:
+  - name: Get switch SN
+    shell: cat /sys/class/swmon/hwinfo/serial_number
+    register: sn
+  - set_fact: sn_arry='{"sn":[\"{{sn.stdout_lines[0]}}\"]}'
+
+  - name: Get switch current config
+    shell: cat /pica/config/pica.conf
+    register: running_config
+
+  - name: get the snapshot from database
+    uri:
+      url: https://10.8.0.1/automation/general_op_database_entry
+      validate_certs: false
+      method: POST
+      user: admin
+      password: pica8pica8
+      force_basic_auth: yes
+      force: yes
+      no_log: true
+      return_content: yes
+      body_format: form-urlencoded
+      body:
+      - [ operate_func, "query"]
+      - [ query_table, "switch_config_snapshot"]
+      - [ query_filter, '{"sn": [\"{{sn.stdout_lines[0]}}\"]}']
+      - [ sorts, '[("snapshot_time", False)]']
+      status_code: 200
+    register: snapshot_list
+
+  - copy: content={{ snapshot_list.json.data[0]['archive_config'] }} dest=/home/automation/test.config
+
+  - name: Compare the change of config
+    command: diff --ignore-all-space -r /home/automation/test.config /pica/config/pica.conf
+    failed_when: "diff_result.rc > 1"
+    register: diff_result
+
+  - name: send email if config changed
+    mail:
+      host: smtp.gmail.com
+      port: 587
+      username: yachal.chen1980@gmail.com
+      password: uwoygstikdvliwcg
+      to: Yachal Chen <ychen@pica8.com>
+      subject: Ansible-report
+      body: Switch {{ sn_arry }} config is changed {{ diff_result.stdout_lines }}.
+    delegate_to: localhost
+    when: diff_result.stdout_lines|length > 0
+
+  - name: update new snapshot into database
+    uri:
+      url: https://10.8.0.1/lifecycle/lifecycle_retrieve/sn?sn={{sn.stdout_lines[0]}}&ip={{inventory_hostname}}
+      validate_certs: false
+      method: GET
+      user: admin
+      password: pica8pica8
+      force_basic_auth: yes
+      force: yes
+      return_content: yes
+      status_code: 200
+    when: diff_result.stdout_lines|length > 0
